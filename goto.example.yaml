@@ -1,0 +1,11 @@
+ssh_user: your-user
+ssh_host: jumper.example.com
+ssh_port: 22
+identity_file: ~/.ssh/private_key
+totp_secret: ""
+host_arg_replace_dash: true
+timeout_seconds: 30
+password_prompt: '(?i)password:'
+host_key_prompt_regex: (?i)yes/no
+otp_prompt_regex: 'OTP Code.*:'
+option_prompt_pattern: Opt
