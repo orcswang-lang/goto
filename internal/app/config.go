@@ -10,6 +10,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	legacyPasswordPrompt  = "(?i)password:"
+	defaultPasswordPrompt = "(?i)(^|[^[:alnum:]_-])password:[[:space:]]*$"
+)
+
 type Config struct {
 	SSHUser             string `yaml:"ssh_user"`
 	SSHHost             string `yaml:"ssh_host"`
@@ -29,7 +34,7 @@ func defaultConfig() Config {
 		SSHPort:             22,
 		HostArgReplaceDash:  true,
 		TimeoutSeconds:      30,
-		PasswordPrompt:      "(?i)password:",
+		PasswordPrompt:      defaultPasswordPrompt,
 		HostKeyPromptRegex:  "(?i)yes/no",
 		OTPPromptRegex:      "OTP Code.*:",
 		OptionPromptPattern: "Opt",
@@ -70,6 +75,9 @@ func loadConfig(path string, cfg *Config) error {
 	}
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return err
+	}
+	if cfg.PasswordPrompt == legacyPasswordPrompt {
+		cfg.PasswordPrompt = defaultPasswordPrompt
 	}
 	if cfg.TOTPSecret != "" {
 		if info, err := os.Stat(path); err == nil && info.Mode().Perm()&0077 != 0 {

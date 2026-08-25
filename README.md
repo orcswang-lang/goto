@@ -43,7 +43,7 @@ identity_file: ~/.ssh/private_key
 totp_secret: ""
 host_arg_replace_dash: true
 timeout_seconds: 30
-password_prompt: '(?i)password:'
+password_prompt: '(?i)(^|[^[:alnum:]_-])password:[[:space:]]*$'
 host_key_prompt_regex: (?i)yes/no
 otp_prompt_regex: 'OTP Code.*:'
 option_prompt_pattern: Opt
@@ -98,10 +98,10 @@ export GOTO_TOTP_SECRET='你的 TOTP Secret'
 | `totp_secret`           | TOTP Secret，建议留空并使用`GOTO_TOTP_SECRET` |
 | `host_arg_replace_dash` | 是否将目标参数中的`-` 替换为 `.`            |
 | `timeout_seconds`       | 等待首个提示的超时时间                          |
-| `password_prompt`       | 密码提示匹配正则                                |
-| `host_key_prompt_regex` | SSH host key 确认提示匹配正则                   |
-| `otp_prompt_regex`      | OTP 输入提示匹配正则                            |
-| `option_prompt_pattern` | 跳板机目标选择提示匹配文本                      |
+| `password_prompt`       | 密码提示匹配正则；仅匹配当前行结尾的独立 password: |
+| `host_key_prompt_regex` | SSH host key 确认提示匹配正则；仅匹配当前输出行 |
+| `otp_prompt_regex`      | OTP 输入提示匹配正则；仅匹配当前输出行          |
+| `option_prompt_pattern` | 跳板机目标选择提示匹配文本；仅匹配当前输出行    |
 
 如果配置文件中包含 `totp_secret`，文件权限必须为 `0600` 或更严格。
 

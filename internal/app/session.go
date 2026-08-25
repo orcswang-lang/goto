@@ -129,7 +129,7 @@ func maybeRespond(w io.Writer, cfg Config, state *sessionState, passwordRe, host
 	state.mu.Lock()
 	defer state.mu.Unlock()
 
-	if !state.hostKeySent && hostKeyRe.MatchString(text) {
+	if !state.hostKeySent && isCurrentLineMatch(hostKeyRe, text) {
 		_, err := fmt.Fprint(w, "yes\r")
 		if err != nil {
 			return err
@@ -138,7 +138,7 @@ func maybeRespond(w io.Writer, cfg Config, state *sessionState, passwordRe, host
 		return nil
 	}
 
-	if !state.passwordSent && passwordRe.MatchString(text) {
+	if !state.passwordSent && isPasswordPrompt(passwordRe, text) {
 		password, err := readPassword("SSH password: ")
 		if err != nil {
 			return err
@@ -151,7 +151,7 @@ func maybeRespond(w io.Writer, cfg Config, state *sessionState, passwordRe, host
 		return nil
 	}
 
-	if !state.otpSent && otpRe.MatchString(text) {
+	if !state.otpSent && isCurrentLineMatch(otpRe, text) {
 		if cfg.TOTPSecret == "" {
 			return errors.New("需要 OTP，但未配置 totp_secret 或 GOTO_TOTP_SECRET")
 		}
@@ -167,7 +167,7 @@ func maybeRespond(w io.Writer, cfg Config, state *sessionState, passwordRe, host
 		return nil
 	}
 
-	if !state.optionSent && state.target != "" && strings.Contains(text, cfg.OptionPromptPattern) {
+	if !state.optionSent && state.target != "" && strings.Contains(stripTerminalControlSequences(currentOutputLine(text)), cfg.OptionPromptPattern) {
 		_, err := fmt.Fprintf(w, "%s\r", state.target)
 		if err != nil {
 			return err
@@ -177,6 +177,61 @@ func maybeRespond(w io.Writer, cfg Config, state *sessionState, passwordRe, host
 	}
 
 	return nil
+}
+
+func isPasswordPrompt(passwordRe *regexp.Regexp, text string) bool {
+	return isCurrentLineMatch(passwordRe, text)
+}
+
+func isCurrentLineMatch(promptRe *regexp.Regexp, text string) bool {
+	return promptRe.MatchString(stripTerminalControlSequences(currentOutputLine(text)))
+}
+
+func currentOutputLine(text string) string {
+	line := text[strings.LastIndexByte(text, '\n')+1:]
+	line = strings.TrimRight(line, "\r")
+	return line[strings.LastIndexByte(line, '\r')+1:]
+}
+
+func stripTerminalControlSequences(text string) string {
+	var result strings.Builder
+	for index := 0; index < len(text); {
+		if text[index] != '\x1b' {
+			result.WriteByte(text[index])
+			index++
+			continue
+		}
+
+		if index+1 >= len(text) {
+			break
+		}
+		switch text[index+1] {
+		case '[':
+			index += 2
+			for index < len(text) {
+				if text[index] >= 0x40 && text[index] <= 0x7e {
+					index++
+					break
+				}
+				index++
+			}
+		case ']':
+			index += 2
+			for index < len(text) && text[index] != '\a' {
+				if text[index] == '\x1b' && index+1 < len(text) && text[index+1] == '\\' {
+					index += 2
+					break
+				}
+				index++
+			}
+			if index < len(text) && text[index] == '\a' {
+				index++
+			}
+		default:
+			index += 2
+		}
+	}
+	return result.String()
 }
 
 func readPassword(prompt string) (string, error) {

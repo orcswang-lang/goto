@@ -5,7 +5,7 @@ identity_file: ~/.ssh/private_key
 totp_secret: ""
 host_arg_replace_dash: true
 timeout_seconds: 30
-password_prompt: '(?i)password:'
+password_prompt: "(?i)(^|[^[:alnum:]_-])password:[[:space:]]*$"
 host_key_prompt_regex: (?i)yes/no
-otp_prompt_regex: 'OTP Code.*:'
+otp_prompt_regex: "OTP Code.*:"
 option_prompt_pattern: Opt
