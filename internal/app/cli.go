@@ -1,10 +1,15 @@
 package app
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"os"
+	"strconv"
 	"strings"
+
+	"golang.org/x/term"
 )
 
 func Run(version string) {
@@ -67,7 +72,7 @@ func Run(version string) {
 		return
 	}
 
-	name, jumper, err := cfg.selectJumper(jumperName)
+	name, jumper, err := chooseJumper(cfg, jumperName)
 	if err != nil {
 		exitf("选择 jumper 失败: %v", err)
 	}
@@ -112,6 +117,68 @@ func Run(version string) {
 	}
 	if err := run(jumper, cfg, target); err != nil {
 		exitf("执行失败: %v", err)
+	}
+}
+
+// chooseJumper 决定本次使用哪个 jumper：
+//   - 显式指定 -jumper 时校验并使用；
+//   - 未指定且仅有一个 jumper 时直接使用；
+//   - 未指定且标准输入是终端时交互式提示选择；
+//   - 其余情况回退 default 配置或报错（脚本/管道场景保持确定性）。
+func chooseJumper(cfg Config, jumperName string) (string, Jumper, error) {
+	if jumperName != "" {
+		return cfg.selectJumper(jumperName)
+	}
+	if len(cfg.Jumpers) == 1 {
+		return cfg.selectJumper("")
+	}
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		name, err := promptSelectJumper(cfg, bufio.NewReader(os.Stdin), os.Stdout)
+		if err != nil {
+			return "", Jumper{}, err
+		}
+		return cfg.selectJumper(name)
+	}
+	return cfg.selectJumper("")
+}
+
+// promptSelectJumper 打印 jumper 列表并循环读取用户选择：
+// 支持编号、名称、回车（默认项）；输入无效时重新提示，EOF 时返回错误。
+func promptSelectJumper(cfg Config, in *bufio.Reader, out io.Writer) (string, error) {
+	names := cfg.jumperNames()
+	_, hasDefault := cfg.Jumpers[cfg.Default]
+	for {
+		fmt.Fprintln(out, "请选择 jumper:")
+		for i, name := range names {
+			if name == cfg.Default {
+				fmt.Fprintf(out, "  %d) %s (默认)\n", i+1, name)
+			} else {
+				fmt.Fprintf(out, "  %d) %s\n", i+1, name)
+			}
+		}
+		if hasDefault {
+			fmt.Fprint(out, "输入编号或名称 [回车=默认]: ")
+		} else {
+			fmt.Fprint(out, "输入编号或名称: ")
+		}
+		line, err := in.ReadString('\n')
+		if err != nil {
+			return "", err
+		}
+		choice := strings.TrimSpace(line)
+		if choice == "" {
+			if hasDefault {
+				return cfg.Default, nil
+			}
+			continue
+		}
+		if n, err := strconv.Atoi(choice); err == nil && n >= 1 && n <= len(names) {
+			return names[n-1], nil
+		}
+		if _, ok := cfg.Jumpers[choice]; ok {
+			return choice, nil
+		}
+		fmt.Fprintf(out, "无效选择: %q\n\n", choice)
 	}
 }
 
@@ -174,6 +241,7 @@ func usage() {
   goto [target-host] [options]
 
 示例:
+  goto
   goto app-prod-01
   goto app-prod-01 -jumper prod
   goto app-prod-01 -config ~/.goto/config.yaml

@@ -6,6 +6,7 @@
 
 - 单二进制运行，无需 Python 运行时
 - 支持 YAML 配置文件，可配置多个 jumper 并随时切换
+- 不带 `-jumper` 时交互式提示选择 jumper（终端环境）
 - 支持命令行参数覆盖配置
 - 支持 `GOTO_TOTP_SECRET_<JUMPER>` / `GOTO_TOTP_SECRET` 环境变量注入 TOTP Secret
 - 自动识别并响应 SSH host key 确认、密码提示、OTP 提示、目标主机选择提示
@@ -74,6 +75,18 @@ export GOTO_TOTP_SECRET_JUMPER_B='jumper-b 的 TOTP Secret'
 ./goto app-prod-01 -jumper jumper-b
 ./goto app-prod-01            # 使用 default 指定的 jumper
 ```
+
+不带 `-jumper` 时，如果配置了多个 jumper 且标准输入是终端，会交互式提示选择（支持编号、名称、回车选默认项）：
+
+```text
+$ goto
+请选择 jumper:
+  1) jumper-a
+  2) jumper-b (默认)
+输入编号或名称 [回车=默认]:
+```
+
+管道/脚本等非终端场景不提示：有 `default` 时直接用，无 `default` 时报错并提示使用 `-jumper`。
 
 列出所有 jumper：
 
