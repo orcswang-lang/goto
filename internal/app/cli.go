@@ -28,14 +28,14 @@ func Run(version string) {
 
 	flag.StringVar(&configPath, "config", defaultConfigPath(), "配置文件路径")
 	flag.BoolVar(&initConfig, "init-config", false, "生成示例配置文件")
-	flag.StringVar(&jumperName, "jumper", "", "选择使用的 jumper 名称（配置中 jumpers 的 key），不指定时使用 default 配置")
+	flag.StringVar(&jumperName, "jumper", "", "选择使用的 jumper 名称（配置中 jumpers 的 key），不指定时在终端交互式选择或使用 default 配置")
 	flag.BoolVar(&listJumpers, "list", false, "列出所有 jumper")
 	flag.StringVar(&user, "user", "", "SSH 用户名，覆盖所选 jumper 的配置")
 	flag.StringVar(&host, "host", "", "SSH 主机，覆盖所选 jumper 的配置")
 	flag.IntVar(&port, "port", 0, "SSH 端口，覆盖所选 jumper 的配置")
 	flag.StringVar(&identityFile, "i", "", "SSH 私钥路径，覆盖所选 jumper 的配置")
 	flag.StringVar(&totpSecret, "totp-secret", "", "TOTP Secret，优先使用环境变量 GOTO_TOTP_SECRET_<JUMPER> 或 GOTO_TOTP_SECRET")
-	flag.IntVar(&timeout, "timeout", 0, "等待提示超时时间，单位秒")
+	flag.IntVar(&timeout, "timeout", 0, "等待 ssh 首次输出的超时时间，单位秒")
 	flag.BoolVar(&showVersion, "version", false, "显示版本")
 	flag.Usage = usage
 	os.Args = reorderArgs(flag.CommandLine, os.Args)
