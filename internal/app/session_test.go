@@ -57,59 +57,6 @@ func TestPasswordPromptMatching(t *testing.T) {
 	}
 }
 
-func TestPromptMatchersOnlyCheckCurrentOutputLine(t *testing.T) {
-	promptRe := regexp.MustCompile("(?i)yes/no|otp code.*:")
-
-	if isCurrentLineMatch(promptRe, "Are you sure you want to continue (yes/no)?\r\napplication output") {
-		t.Fatal("historical prompt text must not match")
-	}
-	if !isCurrentLineMatch(promptRe, "application output\r\nOTP Code: ") {
-		t.Fatal("current prompt text must match")
-	}
-}
-
-func TestCurrentOutputLine(t *testing.T) {
-	tests := []struct {
-		name string
-		text string
-		want string
-	}{
-		{name: "no line break", text: "password: ", want: "password: "},
-		{name: "line feed", text: "previous\npassword: ", want: "password: "},
-		{name: "carriage return", text: "previous\rpassword: ", want: "password: "},
-		{name: "trailing carriage return", text: "password: \r", want: "password: "},
-		{name: "carriage return line feed", text: "previous\r\npassword: ", want: "password: "},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if got := currentOutputLine(test.text); got != test.want {
-				t.Fatalf("currentOutputLine() = %q, want %q", got, test.want)
-			}
-		})
-	}
-}
-
-func TestStripTerminalControlSequences(t *testing.T) {
-	tests := []struct {
-		name string
-		text string
-		want string
-	}{
-		{name: "ansi color", text: "\x1b[31mpassword:\x1b[0m", want: "password:"},
-		{name: "clear line", text: "password:\x1b[K", want: "password:"},
-		{name: "terminal title", text: "\x1b]0;session\apassword:", want: "password:"},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if got := stripTerminalControlSequences(test.text); got != test.want {
-				t.Fatalf("stripTerminalControlSequences() = %q, want %q", got, test.want)
-			}
-		})
-	}
-}
-
 func TestSshArgs(t *testing.T) {
 	jumper := Jumper{
 		SSHUser:      "alice",
@@ -142,8 +89,8 @@ func TestLoadConfigMigratesLegacyPasswordPrompt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg := defaultConfig()
-	if err := loadConfig(path, &cfg); err != nil {
+	cfg := DefaultConfig()
+	if err := LoadConfig(path, &cfg); err != nil {
 		t.Fatal(err)
 	}
 	if cfg.PasswordPrompt != defaultPasswordPrompt {

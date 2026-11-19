@@ -16,6 +16,8 @@ import (
 	"github.com/creack/pty"
 	"github.com/pquerna/otp/totp"
 	"golang.org/x/term"
+
+	"goto/internal/termutil"
 )
 
 // sshArgs 根据所选 jumper 构造 ssh 命令行参数。
@@ -243,7 +245,7 @@ func maybeRespond(w io.Writer, jumper Jumper, cfg Config, state *sessionState, p
 		return nil
 	}
 
-	if !state.optionSent && state.target != "" && strings.Contains(stripTerminalControlSequences(currentOutputLine(text)), cfg.OptionPromptPattern) {
+	if !state.optionSent && state.target != "" && strings.Contains(termutil.StripControlSequences(termutil.CurrentOutputLine(text)), cfg.OptionPromptPattern) {
 		_, err := fmt.Fprintf(w, "%s\r", state.target)
 		if err != nil {
 			return err
@@ -256,54 +258,7 @@ func maybeRespond(w io.Writer, jumper Jumper, cfg Config, state *sessionState, p
 }
 
 func isCurrentLineMatch(promptRe *regexp.Regexp, text string) bool {
-	return promptRe.MatchString(stripTerminalControlSequences(currentOutputLine(text)))
-}
-
-func currentOutputLine(text string) string {
-	line := text[strings.LastIndexByte(text, '\n')+1:]
-	line = strings.TrimRight(line, "\r")
-	return line[strings.LastIndexByte(line, '\r')+1:]
-}
-
-func stripTerminalControlSequences(text string) string {
-	var result strings.Builder
-	for index := 0; index < len(text); {
-		if text[index] != '\x1b' {
-			result.WriteByte(text[index])
-			index++
-			continue
-		}
-
-		if index+1 >= len(text) {
-			break
-		}
-		switch text[index+1] {
-		case '[':
-			index += 2
-			for index < len(text) {
-				if text[index] >= 0x40 && text[index] <= 0x7e {
-					index++
-					break
-				}
-				index++
-			}
-		case ']':
-			index += 2
-			for index < len(text) && text[index] != '\a' {
-				if text[index] == '\x1b' && index+1 < len(text) && text[index+1] == '\\' {
-					index += 2
-					break
-				}
-				index++
-			}
-			if index < len(text) && text[index] == '\a' {
-				index++
-			}
-		default:
-			index += 2
-		}
-	}
-	return result.String()
+	return termutil.CurrentLineMatches(promptRe, text)
 }
 
 // readPassword 通过统一 stdin 路由读取密码：

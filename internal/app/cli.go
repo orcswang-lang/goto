@@ -26,7 +26,7 @@ func Run(version string) {
 	var timeout int
 	var showVersion bool
 
-	flag.StringVar(&configPath, "config", defaultConfigPath(), "配置文件路径")
+	flag.StringVar(&configPath, "config", DefaultConfigPath(), "配置文件路径")
 	flag.BoolVar(&initConfig, "init-config", false, "生成示例配置文件")
 	flag.StringVar(&jumperName, "jumper", "", "选择使用的 jumper 名称（配置中 jumpers 的 key），不指定时在终端交互式选择或使用 default 配置")
 	flag.BoolVar(&listJumpers, "list", false, "列出所有 jumper")
@@ -47,15 +47,15 @@ func Run(version string) {
 	}
 
 	if initConfig {
-		if err := writeExampleConfig(configPath); err != nil {
+		if err := WriteExampleConfig(configPath); err != nil {
 			exitf("生成配置失败: %v", err)
 		}
 		fmt.Printf("已生成配置: %s\n", configPath)
 		return
 	}
 
-	cfg := defaultConfig()
-	if err := loadConfig(configPath, &cfg); err != nil {
+	cfg := DefaultConfig()
+	if err := LoadConfig(configPath, &cfg); err != nil {
 		exitf("读取配置失败: %v", err)
 	}
 
@@ -63,7 +63,7 @@ func Run(version string) {
 		if len(cfg.Jumpers) == 0 {
 			exitf("未配置任何 jumper")
 		}
-		for _, name := range cfg.jumperNames() {
+		for _, name := range cfg.JumperNames() {
 			if name == cfg.Default {
 				fmt.Printf("%s (默认)\n", name)
 			} else {
@@ -114,10 +114,10 @@ func Run(version string) {
 		target = strings.ReplaceAll(target, "-", ".")
 	}
 
-	if err := cfg.validate(); err != nil {
+	if err := cfg.Validate(); err != nil {
 		exitf("配置无效: %v", err)
 	}
-	if err := jumper.validate(); err != nil {
+	if err := jumper.Validate(); err != nil {
 		exitf("jumper %q 配置无效: %v", name, err)
 	}
 	if err := run(jumper, cfg, target); err != nil {
@@ -132,25 +132,25 @@ func Run(version string) {
 //   - 其余情况回退 default 配置或报错（脚本/管道场景保持确定性）。
 func chooseJumper(cfg Config, jumperName string) (string, Jumper, error) {
 	if jumperName != "" {
-		return cfg.selectJumper(jumperName)
+		return cfg.SelectJumper(jumperName)
 	}
 	if len(cfg.Jumpers) == 1 {
-		return cfg.selectJumper("")
+		return cfg.SelectJumper("")
 	}
 	if term.IsTerminal(int(os.Stdin.Fd())) {
 		name, err := promptSelectJumper(cfg, bufio.NewReader(os.Stdin), os.Stdout)
 		if err != nil {
 			return "", Jumper{}, err
 		}
-		return cfg.selectJumper(name)
+		return cfg.SelectJumper(name)
 	}
-	return cfg.selectJumper("")
+	return cfg.SelectJumper("")
 }
 
 // promptSelectJumper 打印 jumper 列表并循环读取用户选择：
 // 支持编号、名称、回车（默认项）；输入无效时重新提示，EOF 时返回错误。
 func promptSelectJumper(cfg Config, in *bufio.Reader, out io.Writer) (string, error) {
-	names := cfg.jumperNames()
+	names := cfg.JumperNames()
 	_, hasDefault := cfg.Jumpers[cfg.Default]
 	for {
 		fmt.Fprintln(out, "请选择 jumper:")

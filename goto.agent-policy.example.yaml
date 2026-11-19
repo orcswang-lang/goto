@@ -1,0 +1,22 @@
+# goto-mcp Agent 访问策略
+# 策略描述「Agent 允许连接什么、做什么」；连接参数仍在 ~/.goto/config.yaml。
+version: 1
+
+# 允许 Agent 连接（goto_session_open）的 jumper 列表；空列表拒绝所有连接。
+allowed_jumpers:
+  - prod-readonly
+
+# 允许的目标主机正则列表；空列表拒绝所有非空目标。
+# 注意：匹配的是规范化后的目标（host_arg_replace_dash 应用之后）。
+# 目标留空（纯登录跳板机）不受此限制。
+target_patterns:
+  - "^app\\.[0-9]+$"
+  - "^app\\.prod\\.[0-9]+$"
+
+# v1 固定值，不可修改：
+#   allow_session_input: false       —— Agent 无法向远程会话发送输入
+#   host_key_policy: known_hosts_only —— 只信任 known_hosts，未知 host key 拒绝连接
+#   credential_provider: os          —— 凭据只从系统安全存储读取
+idle_timeout_seconds: 900
+max_session_seconds: 1800
+max_output_bytes: 65536

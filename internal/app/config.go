@@ -41,7 +41,8 @@ type Config struct {
 	OptionPromptPattern string `yaml:"option_prompt_pattern"`
 }
 
-func defaultConfig() Config {
+// DefaultConfig 返回全局默认配置。
+func DefaultConfig() Config {
 	return Config{
 		Jumpers:             map[string]Jumper{},
 		HostArgReplaceDash:  true,
@@ -145,7 +146,7 @@ func (c *Config) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
-func defaultConfigPath() string {
+func DefaultConfigPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "goto.yaml"
@@ -153,8 +154,8 @@ func defaultConfigPath() string {
 	return filepath.Join(home, ".goto", "config.yaml")
 }
 
-func writeExampleConfig(path string) error {
-	cfg := defaultConfig()
+func WriteExampleConfig(path string) error {
+	cfg := DefaultConfig()
 	cfg.Default = "jumper-a"
 	cfg.Jumpers = map[string]Jumper{
 		"jumper-a": {
@@ -181,7 +182,8 @@ func writeExampleConfig(path string) error {
 	return os.WriteFile(path, data, 0600)
 }
 
-func loadConfig(path string, cfg *Config) error {
+// LoadConfig 从指定路径加载配置；文件不存在时保留默认值并返回 nil。
+func LoadConfig(path string, cfg *Config) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -213,7 +215,7 @@ func loadConfig(path string, cfg *Config) error {
 	return nil
 }
 
-func (j Jumper) validate() error {
+func (j Jumper) Validate() error {
 	if j.SSHUser == "" {
 		return errors.New("ssh_user 不能为空")
 	}
@@ -229,7 +231,7 @@ func (j Jumper) validate() error {
 	return nil
 }
 
-func (c Config) validate() error {
+func (c Config) Validate() error {
 	if c.TimeoutSeconds <= 0 {
 		return errors.New("timeout_seconds 必须大于 0")
 	}
@@ -248,9 +250,9 @@ func (c Config) validate() error {
 	return nil
 }
 
-// selectJumper 根据命令行指定的名称选出 jumper：
+// SelectJumper 根据命令行指定的名称选出 jumper：
 // 未指定时依次回退到 default 配置、唯一 jumper。
-func (c Config) selectJumper(name string) (string, Jumper, error) {
+func (c Config) SelectJumper(name string) (string, Jumper, error) {
 	if len(c.Jumpers) == 0 {
 		return "", Jumper{}, errors.New("未配置任何 jumper")
 	}
@@ -263,17 +265,17 @@ func (c Config) selectJumper(name string) (string, Jumper, error) {
 				name = n
 			}
 		} else {
-			return "", Jumper{}, fmt.Errorf("配置了多个 jumper，请用 -jumper 指定（可选: %s）", strings.Join(c.jumperNames(), ", "))
+			return "", Jumper{}, fmt.Errorf("配置了多个 jumper，请用 -jumper 指定（可选: %s）", strings.Join(c.JumperNames(), ", "))
 		}
 	}
 	jumper, ok := c.Jumpers[name]
 	if !ok {
-		return "", Jumper{}, fmt.Errorf("未找到 jumper %q（可选: %s）", name, strings.Join(c.jumperNames(), ", "))
+		return "", Jumper{}, fmt.Errorf("未找到 jumper %q（可选: %s）", name, strings.Join(c.JumperNames(), ", "))
 	}
 	return name, jumper, nil
 }
 
-func (c Config) jumperNames() []string {
+func (c Config) JumperNames() []string {
 	names := make([]string, 0, len(c.Jumpers))
 	for name := range c.Jumpers {
 		names = append(names, name)

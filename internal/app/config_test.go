@@ -24,8 +24,8 @@ jumpers:
 		t.Fatal(err)
 	}
 
-	cfg := defaultConfig()
-	if err := loadConfig(path, &cfg); err != nil {
+	cfg := DefaultConfig()
+	if err := LoadConfig(path, &cfg); err != nil {
 		t.Fatal(err)
 	}
 	if cfg.Default != "jumper-b" {
@@ -61,8 +61,8 @@ timeout_seconds: 15
 		t.Fatal(err)
 	}
 
-	cfg := defaultConfig()
-	if err := loadConfig(path, &cfg); err != nil {
+	cfg := DefaultConfig()
+	if err := LoadConfig(path, &cfg); err != nil {
 		t.Fatal(err)
 	}
 	if cfg.Default != legacyJumperName {
@@ -106,7 +106,7 @@ func TestSelectJumper(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got, jumper, err := cfg.selectJumper(test.request)
+			got, jumper, err := cfg.SelectJumper(test.request)
 			if test.wantErr {
 				if err == nil {
 					t.Fatal("selectJumper() = nil error, want error")
@@ -127,12 +127,12 @@ func TestSelectJumper(t *testing.T) {
 }
 
 func TestSelectJumperErrors(t *testing.T) {
-	if _, _, err := (Config{}).selectJumper(""); err == nil {
+	if _, _, err := (Config{}).SelectJumper(""); err == nil {
 		t.Fatal("no jumpers: want error")
 	}
 
 	single := Config{Jumpers: map[string]Jumper{"only": {}}}
-	name, _, err := single.selectJumper("")
+	name, _, err := single.SelectJumper("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestSelectJumperErrors(t *testing.T) {
 			"jumper-b": {},
 		},
 	}
-	if _, _, err := multi.selectJumper(""); err == nil {
+	if _, _, err := multi.SelectJumper(""); err == nil {
 		t.Fatal("multi jumper without default: want error")
 	}
 }
@@ -178,19 +178,19 @@ func TestLoadConfigTotpSecretPermissionCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg := defaultConfig()
-	if err := loadConfig(path, &cfg); err == nil {
+	cfg := DefaultConfig()
+	if err := LoadConfig(path, &cfg); err == nil {
 		t.Fatal("loose perms with totp_secret: want error")
 	}
 }
 
 func TestValidateRejectsEmptyOptionPromptPattern(t *testing.T) {
-	cfg := defaultConfig()
+	cfg := DefaultConfig()
 	cfg.OptionPromptPattern = ""
 	cfg.Jumpers = map[string]Jumper{
 		"jumper-a": {SSHUser: "alice", SSHHost: "a.example.com", SSHPort: 22, IdentityFile: "~/.ssh/id_a"},
 	}
-	if err := cfg.validate(); err == nil {
+	if err := cfg.Validate(); err == nil {
 		t.Fatal("empty option_prompt_pattern: want error")
 	}
 }
@@ -209,8 +209,8 @@ jumpers:
 		t.Fatal(err)
 	}
 
-	cfg := defaultConfig()
-	if err := loadConfig(path, &cfg); err == nil {
+	cfg := DefaultConfig()
+	if err := LoadConfig(path, &cfg); err == nil {
 		t.Fatal("顶层 totp_secret 与 jumpers 共存: want error")
 	}
 }
