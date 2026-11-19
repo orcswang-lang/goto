@@ -18,14 +18,18 @@ import (
 	"golang.org/x/term"
 )
 
-func run(cfg Config, target string) error {
-	args := []string{
+// sshArgs 根据所选 jumper 构造 ssh 命令行参数。
+func sshArgs(jumper Jumper) []string {
+	return []string{
 		"-o", "IdentitiesOnly=yes",
-		"-i", cfg.IdentityFile,
-		"-p", fmt.Sprintf("%d", cfg.SSHPort),
-		fmt.Sprintf("%s@%s", cfg.SSHUser, cfg.SSHHost),
+		"-i", jumper.IdentityFile,
+		"-p", fmt.Sprintf("%d", jumper.SSHPort),
+		fmt.Sprintf("%s@%s", jumper.SSHUser, jumper.SSHHost),
 	}
-	cmd := exec.Command("ssh", args...)
+}
+
+func run(jumper Jumper, cfg Config, target string) error {
+	cmd := exec.Command("ssh", sshArgs(jumper)...)
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
 		return err
@@ -53,7 +57,7 @@ func run(cfg Config, target string) error {
 	state := &sessionState{target: target}
 
 	go func() {
-		readerDone <- readAndRespond(ptmx, os.Stdout, cfg, state, passwordRe, hostKeyRe, otpRe)
+		readerDone <- readAndRespond(ptmx, os.Stdout, jumper, cfg, state, passwordRe, hostKeyRe, otpRe)
 	}()
 	go func() {
 		_, _ = io.Copy(ptmx, os.Stdin)
@@ -100,7 +104,7 @@ func (s *sessionState) seenAnyPrompt() bool {
 	return s.passwordSent || s.hostKeySent || s.otpSent || s.optionSent
 }
 
-func readAndRespond(rw io.ReadWriter, out io.Writer, cfg Config, state *sessionState, passwordRe, hostKeyRe, otpRe *regexp.Regexp) error {
+func readAndRespond(rw io.ReadWriter, out io.Writer, jumper Jumper, cfg Config, state *sessionState, passwordRe, hostKeyRe, otpRe *regexp.Regexp) error {
 	buf := make([]byte, 1024)
 	window := bytes.Buffer{}
 	for {
@@ -115,7 +119,7 @@ func readAndRespond(rw io.ReadWriter, out io.Writer, cfg Config, state *sessionS
 				window.Write(b[len(b)-2048:])
 			}
 			text := window.String()
-			if err := maybeRespond(rw, cfg, state, passwordRe, hostKeyRe, otpRe, text); err != nil {
+			if err := maybeRespond(rw, jumper, cfg, state, passwordRe, hostKeyRe, otpRe, text); err != nil {
 				return err
 			}
 		}
@@ -125,7 +129,7 @@ func readAndRespond(rw io.ReadWriter, out io.Writer, cfg Config, state *sessionS
 	}
 }
 
-func maybeRespond(w io.Writer, cfg Config, state *sessionState, passwordRe, hostKeyRe, otpRe *regexp.Regexp, text string) error {
+func maybeRespond(w io.Writer, jumper Jumper, cfg Config, state *sessionState, passwordRe, hostKeyRe, otpRe *regexp.Regexp, text string) error {
 	state.mu.Lock()
 	defer state.mu.Unlock()
 
@@ -152,10 +156,10 @@ func maybeRespond(w io.Writer, cfg Config, state *sessionState, passwordRe, host
 	}
 
 	if !state.otpSent && isCurrentLineMatch(otpRe, text) {
-		if cfg.TOTPSecret == "" {
-			return errors.New("需要 OTP，但未配置 totp_secret 或 GOTO_TOTP_SECRET")
+		if jumper.TOTPSecret == "" {
+			return errors.New("需要 OTP，但未配置 totp_secret、GOTO_TOTP_SECRET 或 GOTO_TOTP_SECRET_<JUMPER>")
 		}
-		code, err := totp.GenerateCode(cfg.TOTPSecret, time.Now())
+		code, err := totp.GenerateCode(jumper.TOTPSecret, time.Now())
 		if err != nil {
 			return err
 		}

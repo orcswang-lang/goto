@@ -1,8 +1,17 @@
-ssh_user: your-user
-ssh_host: jumper.example.com
-ssh_port: 22
-identity_file: ~/.ssh/private_key
-totp_secret: ""
+default: jumper-a
+jumpers:
+    jumper-a:
+        ssh_user: your-user
+        ssh_host: jumper-a.example.com
+        ssh_port: 22
+        identity_file: ~/.ssh/private_key
+        totp_secret: ""
+    jumper-b:
+        ssh_user: your-user
+        ssh_host: jumper-b.example.com
+        ssh_port: 22
+        identity_file: ~/.ssh/private_key_b
+        totp_secret: ""
 host_arg_replace_dash: true
 timeout_seconds: 30
 password_prompt: "(?i)(^|[^[:alnum:]_-])password:[[:space:]]*$"

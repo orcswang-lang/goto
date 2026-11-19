@@ -108,6 +108,30 @@ func TestStripTerminalControlSequences(t *testing.T) {
 	}
 }
 
+func TestSshArgs(t *testing.T) {
+	jumper := Jumper{
+		SSHUser:      "alice",
+		SSHHost:      "jumper.example.com",
+		SSHPort:      2222,
+		IdentityFile: "~/.ssh/id_a",
+	}
+	want := []string{
+		"-o", "IdentitiesOnly=yes",
+		"-i", "~/.ssh/id_a",
+		"-p", "2222",
+		"alice@jumper.example.com",
+	}
+	got := sshArgs(jumper)
+	if len(got) != len(want) {
+		t.Fatalf("sshArgs() = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("sshArgs() = %v, want %v", got, want)
+		}
+	}
+}
+
 func TestLoadConfigMigratesLegacyPasswordPrompt(t *testing.T) {
 	directory := t.TempDir()
 	path := directory + "/config.yaml"
