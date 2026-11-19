@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestIsPasswordPrompt(t *testing.T) {
+func TestPasswordPromptMatching(t *testing.T) {
 	passwordRe := regexp.MustCompile(defaultPasswordPrompt)
 
 	tests := []struct {
@@ -50,8 +50,8 @@ func TestIsPasswordPrompt(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := isPasswordPrompt(passwordRe, test.text); got != test.want {
-				t.Fatalf("isPasswordPrompt() = %t, want %t", got, test.want)
+			if got := isCurrentLineMatch(passwordRe, test.text); got != test.want {
+				t.Fatalf("isCurrentLineMatch() = %t, want %t", got, test.want)
 			}
 		})
 	}

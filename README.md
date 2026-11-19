@@ -153,7 +153,7 @@ $ goto
 | `identity_file`  | SSH 私钥路径                                                 |
 | `totp_secret`    | TOTP Secret，建议留空并使用 `GOTO_TOTP_SECRET_<JUMPER>` |
 
-旧版扁平格式（顶层直接写 `ssh_user` 等字段）仍然兼容，会当作名为 `default` 的单个 jumper。
+旧版扁平格式（顶层直接写 `ssh_user` 等字段）仍然兼容，会当作名为 `default` 的单个 jumper。两种格式不要混用：`jumpers` 存在时顶层再写 `ssh_user` 等旧字段会直接报错，请把它们移入对应的 jumper 下。
 
 如果配置文件中任一 jumper 包含 `totp_secret`，文件权限必须为 `0600` 或更严格。
 

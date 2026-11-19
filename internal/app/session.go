@@ -217,7 +217,7 @@ func maybeRespond(w io.Writer, jumper Jumper, cfg Config, state *sessionState, p
 		return nil
 	}
 
-	if !state.passwordSent && isPasswordPrompt(passwordRe, text) {
+	if !state.passwordSent && isCurrentLineMatch(passwordRe, text) {
 		password := readPassword(state, "SSH password: ")
 		_, err := fmt.Fprintf(w, "%s\r", password)
 		if err != nil {
@@ -253,10 +253,6 @@ func maybeRespond(w io.Writer, jumper Jumper, cfg Config, state *sessionState, p
 	}
 
 	return nil
-}
-
-func isPasswordPrompt(passwordRe *regexp.Regexp, text string) bool {
-	return isCurrentLineMatch(passwordRe, text)
 }
 
 func isCurrentLineMatch(promptRe *regexp.Regexp, text string) bool {

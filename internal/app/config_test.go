@@ -194,3 +194,23 @@ func TestValidateRejectsEmptyOptionPromptPattern(t *testing.T) {
 		t.Fatal("empty option_prompt_pattern: want error")
 	}
 }
+
+func TestLoadConfigRejectsLegacyTopLevelFieldsWithJumpers(t *testing.T) {
+	directory := t.TempDir()
+	path := directory + "/config.yaml"
+	data := []byte(`totp_secret: JBSWY3DPEHPK3PXP
+jumpers:
+  jumper-a:
+    ssh_user: alice
+    ssh_host: a.example.com
+    identity_file: ~/.ssh/id_a
+`)
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := defaultConfig()
+	if err := loadConfig(path, &cfg); err == nil {
+		t.Fatal("顶层 totp_secret 与 jumpers 共存: want error")
+	}
+}

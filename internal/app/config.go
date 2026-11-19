@@ -62,6 +62,11 @@ func (c *Config) UnmarshalYAML(node *yaml.Node) error {
 		return err
 	}
 	if _, multi := fields["jumpers"]; multi {
+		for _, legacy := range []string{"ssh_user", "ssh_host", "ssh_port", "identity_file", "totp_secret"} {
+			if _, ok := fields[legacy]; ok {
+				return fmt.Errorf("顶层 %s 已过时：多 jumper 格式请把 SSH 连接字段移入 jumpers 下对应的 jumper", legacy)
+			}
+		}
 		type plain Config
 		var p plain
 		if err := node.Decode(&p); err != nil {
