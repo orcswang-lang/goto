@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -195,10 +196,12 @@ func loadConfig(path string, cfg *Config) error {
 			cfg.Jumpers[name] = jumper
 		}
 	}
-	if info, err := os.Stat(path); err == nil && info.Mode().Perm()&0077 != 0 {
-		for _, jumper := range cfg.Jumpers {
-			if jumper.TOTPSecret != "" {
-				return fmt.Errorf("配置文件 %s 包含 totp_secret 时权限必须为 0600 或更严格", path)
+	if runtime.GOOS != "windows" {
+		if info, err := os.Stat(path); err == nil && info.Mode().Perm()&0077 != 0 {
+			for _, jumper := range cfg.Jumpers {
+				if jumper.TOTPSecret != "" {
+					return fmt.Errorf("配置文件 %s 包含 totp_secret 时权限必须为 0600 或更严格", path)
+				}
 			}
 		}
 	}
@@ -224,6 +227,9 @@ func (j Jumper) validate() error {
 func (c Config) validate() error {
 	if c.TimeoutSeconds <= 0 {
 		return errors.New("timeout_seconds 必须大于 0")
+	}
+	if c.OptionPromptPattern == "" {
+		return errors.New("option_prompt_pattern 不能为空")
 	}
 	if _, err := regexp.Compile(c.PasswordPrompt); err != nil {
 		return fmt.Errorf("password_prompt 不是合法正则: %w", err)

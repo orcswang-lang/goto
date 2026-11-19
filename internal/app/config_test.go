@@ -183,3 +183,14 @@ func TestLoadConfigTotpSecretPermissionCheck(t *testing.T) {
 		t.Fatal("loose perms with totp_secret: want error")
 	}
 }
+
+func TestValidateRejectsEmptyOptionPromptPattern(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.OptionPromptPattern = ""
+	cfg.Jumpers = map[string]Jumper{
+		"jumper-a": {SSHUser: "alice", SSHHost: "a.example.com", SSHPort: 22, IdentityFile: "~/.ssh/id_a"},
+	}
+	if err := cfg.validate(); err == nil {
+		t.Fatal("empty option_prompt_pattern: want error")
+	}
+}

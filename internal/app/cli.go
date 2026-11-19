@@ -215,8 +215,14 @@ func reorderArgs(flags *flag.FlagSet, args []string) []string {
 		}
 		name, _, hasValue := strings.Cut(strings.TrimPrefix(arg, "-"), "=")
 		f := flags.Lookup(name)
-		if !strings.HasPrefix(arg, "-") || arg == "-" || f == nil {
+		if !strings.HasPrefix(arg, "-") || arg == "-" {
 			positionals = append(positionals, arg)
+			continue
+		}
+		// 未知选项原样保留，让 flag.Parse 报 "flag provided but not defined"，
+		// 避免拼写错误被静默当作位置参数忽略。
+		if f == nil {
+			options = append(options, arg)
 			continue
 		}
 		options = append(options, arg)

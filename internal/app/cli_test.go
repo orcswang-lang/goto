@@ -54,6 +54,11 @@ func TestReorderArgs(t *testing.T) {
 			args: []string{"goto", "app-01", "--", "-jumper", "prod"},
 			want: []string{"goto", "app-01", "--", "-jumper", "prod"},
 		},
+		{
+			name: "unknown flag kept for flag.Parse to reject",
+			args: []string{"goto", "app-01", "-jummper", "prod"},
+			want: []string{"goto", "-jummper", "app-01", "prod"},
+		},
 	}
 
 	for _, test := range tests {

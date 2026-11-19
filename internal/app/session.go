@@ -29,6 +29,9 @@ func sshArgs(jumper Jumper) []string {
 }
 
 func run(jumper Jumper, cfg Config, target string) error {
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return errors.New("需要在交互终端中运行")
+	}
 	cmd := exec.Command("ssh", sshArgs(jumper)...)
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
@@ -67,7 +70,7 @@ func run(jumper Jumper, cfg Config, target string) error {
 	waitDone := make(chan error, 1)
 	go func() { waitDone <- cmd.Wait() }()
 	timer := time.AfterFunc(time.Duration(cfg.TimeoutSeconds)*time.Second, func() {
-		if !state.seenAnyPrompt() {
+		if !state.sawAnyOutput() {
 			_ = cmd.Process.Kill()
 		}
 	})
@@ -95,13 +98,21 @@ type sessionState struct {
 	hostKeySent  bool
 	otpSent      bool
 	optionSent   bool
+	sawOutput    bool
 	target       string
 }
 
-func (s *sessionState) seenAnyPrompt() bool {
+// markOutput 记录 ssh 端出现过输出，会话视为已建立。
+func (s *sessionState) markOutput() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.passwordSent || s.hostKeySent || s.otpSent || s.optionSent
+	s.sawOutput = true
+}
+
+func (s *sessionState) sawAnyOutput() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.sawOutput
 }
 
 func readAndRespond(rw io.ReadWriter, out io.Writer, jumper Jumper, cfg Config, state *sessionState, passwordRe, hostKeyRe, otpRe *regexp.Regexp) error {
@@ -112,12 +123,8 @@ func readAndRespond(rw io.ReadWriter, out io.Writer, jumper Jumper, cfg Config, 
 		if n > 0 {
 			chunk := buf[:n]
 			_, _ = out.Write(chunk)
-			window.Write(chunk)
-			if window.Len() > 4096 {
-				b := window.Bytes()
-				window.Reset()
-				window.Write(b[len(b)-2048:])
-			}
+			state.markOutput()
+			appendWindow(&window, chunk)
 			text := window.String()
 			if err := maybeRespond(rw, jumper, cfg, state, passwordRe, hostKeyRe, otpRe, text); err != nil {
 				return err
@@ -126,6 +133,21 @@ func readAndRespond(rw io.ReadWriter, out io.Writer, jumper Jumper, cfg Config, 
 		if err != nil {
 			return err
 		}
+	}
+}
+
+// appendWindow 维护用于提示匹配的滚动输出窗口：
+// 超过上限时只保留尾部，且从完整行开始，避免把当前提示行拦腰截断。
+func appendWindow(window *bytes.Buffer, chunk []byte) {
+	window.Write(chunk)
+	if window.Len() > 4096 {
+		b := window.Bytes()
+		keep := b[len(b)-2048:]
+		if i := bytes.IndexByte(keep, '\n'); i >= 0 {
+			keep = keep[i+1:]
+		}
+		window.Reset()
+		window.Write(keep)
 	}
 }
 

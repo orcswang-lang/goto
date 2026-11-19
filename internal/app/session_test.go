@@ -1,8 +1,10 @@
 package app
 
 import (
+	"bytes"
 	"os"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -146,5 +148,36 @@ func TestLoadConfigMigratesLegacyPasswordPrompt(t *testing.T) {
 	}
 	if cfg.PasswordPrompt != defaultPasswordPrompt {
 		t.Fatalf("PasswordPrompt = %q, want %q", cfg.PasswordPrompt, defaultPasswordPrompt)
+	}
+}
+
+func TestSessionStateSawOutput(t *testing.T) {
+	s := &sessionState{}
+	if s.sawAnyOutput() {
+		t.Fatal("sawAnyOutput() = true before any output")
+	}
+	s.markOutput()
+	if !s.sawAnyOutput() {
+		t.Fatal("sawAnyOutput() = false after markOutput")
+	}
+}
+
+func TestAppendWindowTrimsAtLineBoundary(t *testing.T) {
+	var window bytes.Buffer
+	window.WriteString(strings.Repeat("x", 2500)) // 无换行的长前缀
+	window.WriteString("HEADER\nTAIL content")
+	appendWindow(&window, []byte(strings.Repeat("y", 2000)))
+
+	want := "TAIL content" + strings.Repeat("y", 2000)
+	if got := window.String(); got != want {
+		t.Fatalf("window = %q (len %d), want %q (len %d)", got, len(got), want, len(want))
+	}
+}
+
+func TestAppendWindowUnderLimitKeepsAll(t *testing.T) {
+	var window bytes.Buffer
+	appendWindow(&window, []byte("small"))
+	if got := window.String(); got != "small" {
+		t.Fatalf("window = %q, want small", got)
 	}
 }
