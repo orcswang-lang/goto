@@ -2,6 +2,7 @@ package app
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -74,6 +75,10 @@ func Run(version string) {
 
 	name, jumper, err := chooseJumper(cfg, jumperName)
 	if err != nil {
+		if errors.Is(err, io.EOF) {
+			fmt.Fprintln(os.Stderr, "goto: 已取消")
+			os.Exit(0)
+		}
 		exitf("选择 jumper 失败: %v", err)
 	}
 

@@ -181,3 +181,55 @@ func TestAppendWindowUnderLimitKeepsAll(t *testing.T) {
 		t.Fatalf("window = %q, want small", got)
 	}
 }
+
+func TestFeedPassword(t *testing.T) {
+	s := &sessionState{}
+
+	// 非等待模式：输入透传（consumed=false，调用方使用原始输入）。
+	consumed, remaining := s.feedPassword([]byte("ls\r"))
+	if consumed {
+		t.Fatal("非等待模式下输入不应被消费")
+	}
+	if remaining != nil {
+		t.Fatalf("非等待模式 remaining = %q, want nil", remaining)
+	}
+
+	// 等待模式：字节累积，\r 完成密码。
+	ch := s.beginPasswordRead()
+	if consumed, _ = s.feedPassword([]byte("hun")); !consumed {
+		t.Fatal("等待模式下输入应被消费")
+	}
+	consumed, remaining = s.feedPassword([]byte("ter2\r"))
+	if !consumed {
+		t.Fatal("等待模式下输入应被消费")
+	}
+	select {
+	case pw := <-ch:
+		if pw != "hunter2" {
+			t.Fatalf("密码 = %q, want hunter2", pw)
+		}
+	default:
+		t.Fatal("密码未在回车后完成")
+	}
+
+	// 完成后输入恢复透传。
+	if consumed, _ = s.feedPassword([]byte("x")); consumed {
+		t.Fatal("密码完成后输入不应再被消费")
+	}
+}
+
+func TestFeedPasswordNewlineAndRemaining(t *testing.T) {
+	s := &sessionState{}
+	ch := s.beginPasswordRead()
+	// \n 同样结束密码；回车之后同批剩余字节透传。
+	consumed, remaining := s.feedPassword([]byte("pw\nnext"))
+	if !consumed {
+		t.Fatal("输入应被消费")
+	}
+	if got := <-ch; got != "pw" {
+		t.Fatalf("密码 = %q, want pw", got)
+	}
+	if string(remaining) != "next" {
+		t.Fatalf("remaining = %q, want next", remaining)
+	}
+}

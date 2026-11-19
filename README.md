@@ -68,6 +68,8 @@ export GOTO_TOTP_SECRET_JUMPER_B='jumper-b 的 TOTP Secret'
 
 如果只设置一个 `GOTO_TOTP_SECRET`，所有 jumper 共用它。
 
+注意：jumper 名转环境变量时大写并替换非字母数字为 `_`，因此 `prod-a` 与 `prod_a` 会映射到同一个环境变量，命名 jumper 时请避免这类碰撞。
+
 选择 jumper 并登录：
 
 ```bash
@@ -135,7 +137,7 @@ $ goto
 | `default`               | 默认 jumper 名称；仅配置一个 jumper 时可省略    |
 | `jumpers`               | jumper 名到连接配置的映射                        |
 | `host_arg_replace_dash` | 是否将目标参数中的`-` 替换为 `.`            |
-| `timeout_seconds`       | 等待首个提示的超时时间                          |
+| `timeout_seconds`       | 等待 ssh 首次输出的超时时间，超时仍未收到任何输出则断开连接 |
 | `password_prompt`       | 密码提示匹配正则；仅匹配当前行结尾的独立 password: |
 | `host_key_prompt_regex` | SSH host key 确认提示匹配正则；仅匹配当前输出行 |
 | `otp_prompt_regex`      | OTP 输入提示匹配正则；仅匹配当前输出行          |
