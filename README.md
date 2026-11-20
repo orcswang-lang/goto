@@ -244,6 +244,8 @@ max_output_bytes: 65536
 }
 ```
 
+`-config` 与 `-agent-policy` 路径的前缀 `~/` 会被展开为用户主目录（MCP 客户端直接 exec，不经 shell，因此仅支持 `~/` 前缀，不支持其他 shell 展开语法）。
+
 stdout 只输出 MCP 协议消息，运行日志走 stderr。
 
 ### 凭据存储
@@ -268,7 +270,7 @@ stdout 只输出 MCP 协议消息，运行日志走 stderr。
 | `goto_session_read` | 增量读取会话输出（游标由服务端权威维护）；远端输出标记为不可信 |
 | `goto_session_close` | 关闭会话；幂等 |
 
-会话状态：`connecting` → `ready` / `failed` / `expired` → `closed`。Agent 通过 `goto_session_read` 轮询登录进度。
+会话状态：`connecting` → `ready` / `failed` / `expired` → `closed`。Agent 通过 `goto_session_read` 轮询登录进度。注意 `ready` 仅表示 ssh 已产生输出，登录（密码/MFA/目标选择）可能仍未完成，应结合输出内容与 `error` 字段判断结果；提示自动应答只在登录窗口（`timeout_seconds`）内进行，登录完成后远端输出的类似提示文本不会被应答。
 
 ### 错误码
 

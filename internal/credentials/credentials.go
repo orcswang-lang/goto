@@ -4,7 +4,10 @@
 // 绝不进入 MCP 请求参数、MCP 响应或普通日志。
 package credentials
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 // ErrNotFound 表示凭据存储中没有对应条目，或平台后端不可用。
 // 调用方应将其映射为 AUTH_REQUIRED，而不是降级为不安全行为。
@@ -24,10 +27,12 @@ type Provider interface {
 type OS struct {
 	// readFn 覆盖底层读取，仅测试注入使用。
 	readFn func(service, account string) (string, error)
+	// timeout 是凭据命令的超时；keyring 需交互解锁时避免会话永久阻塞。
+	timeout time.Duration
 }
 
 // NewOS 返回操作系统凭据提供器。
-func NewOS() *OS { return &OS{} }
+func NewOS() *OS { return &OS{timeout: 10 * time.Second} }
 
 func (o *OS) GetPassword(jumper string) (string, error) {
 	return o.read("goto", jumper)
@@ -41,5 +46,8 @@ func (o *OS) read(service, account string) (string, error) {
 	if o.readFn != nil {
 		return o.readFn(service, account)
 	}
-	return readFromOS(service, account)
+	if o.timeout <= 0 {
+		o.timeout = 10 * time.Second
+	}
+	return readFromOS(service, account, o.timeout)
 }

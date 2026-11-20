@@ -4,6 +4,7 @@ package mcp
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +18,11 @@ const (
 	CodeMethodNotFound = -32601
 	CodeInvalidParams  = -32602
 )
+
+// maxLineBytes 是单条请求消息的行长上限。
+const maxLineBytes = 1024 * 1024
+
+var errLineTooLong = errors.New("line too long")
 
 // Request 是客户端发来的 JSON-RPC 请求或通知。
 type Request struct {
@@ -62,13 +68,23 @@ type Handler interface {
 }
 
 // Serve 从 in 逐行读取 JSON-RPC 消息并写入响应，直到 EOF。
-// 未知方法返回 -32601，无法解析的消息返回 -32700。
+// 未知方法返回 -32601，无法解析的消息返回 -32700；
+// 超过 maxLineBytes 的行会被丢弃并回报 -32700，服务继续处理后续消息。
 func Serve(in io.Reader, out io.Writer, handler Handler) error {
-	scanner := bufio.NewScanner(in)
-	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	reader := bufio.NewReader(in)
 	enc := json.NewEncoder(out)
-	for scanner.Scan() {
-		line := scanner.Bytes()
+	for {
+		line, err := readLine(reader)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			if errors.Is(err, errLineTooLong) {
+				writeResponse(enc, Err(json.RawMessage("null"), CodeParseError, "请求超过 1MB 上限，已丢弃"))
+				continue
+			}
+			return fmt.Errorf("读取请求失败: %w", err)
+		}
 		var req Request
 		if err := json.Unmarshal(line, &req); err != nil {
 			writeResponse(enc, Err(json.RawMessage("null"), CodeParseError, "请求不是合法 JSON"))
@@ -83,10 +99,36 @@ func Serve(in io.Reader, out io.Writer, handler Handler) error {
 			return fmt.Errorf("写入响应失败: %w", err)
 		}
 	}
-	if err := scanner.Err(); err != nil && !errors.Is(err, io.EOF) {
-		return fmt.Errorf("读取请求失败: %w", err)
+}
+
+// readLine 读取一行（去掉尾部 \n）。
+// 行长超过 maxLineBytes 时消费整行并返回 errLineTooLong；EOF 且无数据返回 io.EOF。
+func readLine(r *bufio.Reader) ([]byte, error) {
+	var line []byte
+	for {
+		part, err := r.ReadSlice('\n')
+		line = append(line, part...)
+		if err == nil {
+			return bytes.TrimSuffix(line, []byte("\n")), nil
+		}
+		if errors.Is(err, bufio.ErrBufferFull) {
+			if len(line) > maxLineBytes {
+				// 丢弃该行剩余内容，保持流同步。
+				for {
+					if _, err2 := r.ReadSlice('\n'); err2 == nil {
+						return nil, errLineTooLong
+					} else if !errors.Is(err2, bufio.ErrBufferFull) {
+						return nil, errLineTooLong
+					}
+				}
+			}
+			continue
+		}
+		if len(line) > 0 {
+			return line, nil // EOF 前的最后一行（无换行）
+		}
+		return nil, err
 	}
-	return nil
 }
 
 func writeResponse(enc *json.Encoder, resp Response) {

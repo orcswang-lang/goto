@@ -93,6 +93,36 @@ func TestServeParseError(t *testing.T) {
 	}
 }
 
+func TestServeOversizedLineDoesNotKillServer(t *testing.T) {
+	h := &stubHandler{response: Result(json.RawMessage("2"), "ok")}
+	in := strings.NewReader(strings.Repeat("x", 2<<20) + "\n" + `{"jsonrpc":"2.0","id":2,"method":"ping"}` + "\n")
+	var out bytes.Buffer
+	if err := Serve(in, &out, h); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("output lines = %d, want 2: %s", len(lines), out.String())
+	}
+	var first Response
+	if err := json.Unmarshal([]byte(lines[0]), &first); err != nil {
+		t.Fatal(err)
+	}
+	if first.Error == nil || first.Error.Code != CodeParseError {
+		t.Fatalf("超长行应回报 parse error: %+v", first)
+	}
+	var second Response
+	if err := json.Unmarshal([]byte(lines[1]), &second); err != nil {
+		t.Fatal(err)
+	}
+	if string(second.ID) != "2" || second.Error != nil {
+		t.Fatalf("超长行后的请求应正常处理: %+v", second)
+	}
+	if len(h.requests) != 1 {
+		t.Fatalf("requests = %d, want 1", len(h.requests))
+	}
+}
+
 func TestServeMultipleLines(t *testing.T) {
 	h := &stubHandler{response: Result(json.RawMessage("7"), "ok")}
 	in := strings.NewReader(`{"jsonrpc":"2.0","id":7,"method":"a"}

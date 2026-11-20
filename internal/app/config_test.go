@@ -2,6 +2,7 @@ package app
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -192,6 +193,26 @@ func TestValidateRejectsEmptyOptionPromptPattern(t *testing.T) {
 	}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("empty option_prompt_pattern: want error")
+	}
+}
+
+func TestLoadConfigExpandsTilde(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	path := filepath.Join(home, "goto-cfg", "config.yaml")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	data := []byte("jumpers:\n  a:\n    ssh_user: u\n    ssh_host: h\n    identity_file: ~/.ssh/k\n")
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := DefaultConfig()
+	if err := LoadConfig("~/goto-cfg/config.yaml", &cfg); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := cfg.Jumpers["a"]; !ok {
+		t.Fatal("~/ 前缀路径未展开，配置未加载")
 	}
 }
 

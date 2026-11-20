@@ -294,6 +294,34 @@ exec cat
 	if !isErr || missing["code"] != "SESSION_NOT_FOUND" {
 		t.Fatalf("不存在会话应 SESSION_NOT_FOUND: %+v err=%v", missing, isErr)
 	}
+	// 关闭后的会话已从 Manager 移除，再次读取同样返回 SESSION_NOT_FOUND。
+	missing, isErr = callTool(t, s, "goto_session_read", map[string]any{"session_id": sessionID})
+	if !isErr || missing["code"] != "SESSION_NOT_FOUND" {
+		t.Fatalf("关闭后的会话应已移除: %+v err=%v", missing, isErr)
+	}
+	if _, ok := s.Sessions.Get(sessionID); ok {
+		t.Fatal("Manager 中仍保留已关闭会话")
+	}
+}
+
+func TestMaxBytesSchemaFollowsPolicy(t *testing.T) {
+	s := newTestServer(t, "ssh")
+	s.Policy.MaxOutputBytes = 10000
+	var found bool
+	for _, tl := range s.tools() {
+		if tl.Name != "goto_session_read" {
+			continue
+		}
+		found = true
+		props := tl.InputSchema["properties"].(map[string]any)
+		maxBytes := props["max_bytes"].(map[string]any)
+		if got := maxBytes["maximum"].(int); got != 10000 {
+			t.Fatalf("max_bytes maximum = %v, want 10000", got)
+		}
+	}
+	if !found {
+		t.Fatal("未找到 goto_session_read 工具")
+	}
 }
 
 func TestInvalidArguments(t *testing.T) {
@@ -301,21 +329,20 @@ func TestInvalidArguments(t *testing.T) {
 
 	cases := []struct {
 		name   string
+		tool   string
 		args   map[string]any
 		expect string
 	}{
-		{"缺 jumper", map[string]any{"target": "app-01"}, "INVALID_ARGUMENT"},
-		{"max_bytes 越界", map[string]any{"session_id": "x", "max_bytes": 999999}, "INVALID_ARGUMENT"},
-		{"wait_ms 负值", map[string]any{"session_id": "x", "wait_ms": -1}, "INVALID_ARGUMENT"},
-		{"cursor 非整数", map[string]any{"session_id": "x", "cursor": 1.5}, "INVALID_ARGUMENT"},
+		{"缺 jumper", "goto_session_open", map[string]any{"target": "app-01"}, "INVALID_ARGUMENT"},
+		{"max_bytes 越界", "goto_session_read", map[string]any{"session_id": "x", "max_bytes": 999999}, "INVALID_ARGUMENT"},
+		{"wait_ms 负值", "goto_session_read", map[string]any{"session_id": "x", "wait_ms": -1}, "INVALID_ARGUMENT"},
+		{"cursor 非整数", "goto_session_read", map[string]any{"session_id": "x", "cursor": 1.5}, "INVALID_ARGUMENT"},
+		{"resolve 目标含回车", "goto_resolve_target", map[string]any{"jumper": "prod", "target": "app-01\rwhoami"}, "INVALID_ARGUMENT"},
+		{"open 目标含换行", "goto_session_open", map[string]any{"jumper": "prod", "target": "app\n01"}, "INVALID_ARGUMENT"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			tool := "goto_session_read"
-			if _, ok := c.args["target"]; ok {
-				tool = "goto_session_open"
-			}
-			payload, isErr := callTool(t, s, tool, c.args)
+			payload, isErr := callTool(t, s, c.tool, c.args)
 			if !isErr || payload["code"] != c.expect {
 				t.Fatalf("code = %v err=%v, want %s", payload["code"], isErr, c.expect)
 			}

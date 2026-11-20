@@ -3,6 +3,7 @@
 package credentials
 
 import (
+	"time"
 	"unicode/utf16"
 	"unsafe"
 
@@ -35,7 +36,10 @@ var (
 
 // readFromOS 通过 Windows Credential Manager 读取条目。
 // 存储方式：cmdkey /generic:goto/<account> /user:goto /pass:<secret>
-func readFromOS(service, account string) (string, error) {
+// CredentialBlob 实际为 UTF-16LE；CredReadW 同步返回、无交互阻塞，故忽略 timeout。
+// shortcut: credential 结构体按 64 位指针布局（amd64/arm64）；build.sh 仅产出
+// windows/amd64，支持 386 时需为 4 字节指针重排字段。
+func readFromOS(service, account string, timeout time.Duration) (string, error) {
 	target := service + "/" + account
 	targetPtr, err := windows.UTF16PtrFromString(target)
 	if err != nil {
@@ -55,7 +59,6 @@ func readFromOS(service, account string) (string, error) {
 	if cred == nil || cred.CredentialBlob == nil || cred.CredentialBlobSize == 0 {
 		return "", ErrNotFound
 	}
-	// 约定存储为 UTF-8 文本。
 	blob := unsafe.Slice(cred.CredentialBlob, cred.CredentialBlobSize)
 	units := make([]uint16, len(blob)/2)
 	for i := range units {

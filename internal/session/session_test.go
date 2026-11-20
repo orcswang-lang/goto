@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 // fakeCreds 是可预置结果的凭据提供器。
@@ -65,6 +66,18 @@ flood)
 exit-fail)
   printf 'hello\n'
   exit 1
+  ;;
+host-key-fail)
+  printf 'Host key verification failed.\n'
+  exit 255
+  ;;
+password-late)
+  printf 'welcome\n'
+  sleep 1
+  printf 'jump password: '
+  IFS= read -r pw
+  printf 'got pw: %s\n' "$pw"
+  exec cat
   ;;
 esac
 exit 0
@@ -238,6 +251,45 @@ func TestUpstreamExit(t *testing.T) {
 	}
 }
 
+func TestHostKeyFailMappedToHostKeyRequired(t *testing.T) {
+	s := openTestSession(t, "host-key-fail", fakeCreds{})
+	total, last := waitFor(t, s, 10*time.Second, func(res ReadResult, _ string) bool {
+		return res.State == StateFailed
+	})
+	if last.ErrorCode != "HOST_KEY_REQUIRED" {
+		t.Fatalf("code = %s, want HOST_KEY_REQUIRED\n输出:\n%s", last.ErrorCode, total)
+	}
+}
+
+func TestPromptOutsideLoginWindowNotAnswered(t *testing.T) {
+	s := openTestSession(t, "password-late", fakeCreds{password: "t3stpass"})
+	// 登录窗口 300ms：welcome 输出在窗口内，password 提示在 1s 后到达窗口外。
+	s.mu.Lock()
+	s.opt.LoginTimeout = 300 * time.Millisecond
+	s.mu.Unlock()
+	var total string
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		res := s.Read(64*1024, 200*time.Millisecond)
+		total += res.Chunk
+		if strings.Contains(total, "jump password: ") || time.Now().After(deadline) {
+			break
+		}
+	}
+	time.Sleep(500 * time.Millisecond) // 若误注入，脚本会输出 got pw
+	res := s.Read(64*1024, 0)
+	total += res.Chunk
+	if strings.Contains(total, "got pw") {
+		t.Fatalf("登录窗口外的 password 提示不应注入凭据:\n%s", total)
+	}
+	if strings.Contains(total, "t3stpass") {
+		t.Fatalf("密码泄漏到输出:\n%s", total)
+	}
+	if s.State() == StateFailed {
+		t.Fatalf("窗口外提示不应导致会话失败:\n%s", total)
+	}
+}
+
 func TestCloseIdempotent(t *testing.T) {
 	s := openTestSession(t, "silent", fakeCreds{})
 	s.Close()
@@ -288,6 +340,22 @@ func TestOpenRejectsIncompleteOptions(t *testing.T) {
 	opt.PasswordPrompt = "["
 	if _, err := Open(opt); err == nil {
 		t.Fatal("非法正则: want error")
+	}
+}
+
+func TestAppendVisibleTruncationKeepsUTF8(t *testing.T) {
+	s := &Session{opt: Options{MaxOutput: 7}}
+	s.mu.Lock()
+	s.appendVisibleLocked([]byte("你好世界你好世界"))
+	s.mu.Unlock()
+	if !utf8.ValidString(s.visible) {
+		t.Fatalf("截断产生非法 UTF-8: %q", s.visible)
+	}
+	if len(s.visible) > 7+3 {
+		t.Fatalf("缓冲 %d 字节，超出上限允许值", len(s.visible))
+	}
+	if s.base == 0 {
+		t.Fatal("应发生截断")
 	}
 }
 

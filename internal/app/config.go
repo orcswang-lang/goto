@@ -154,6 +154,17 @@ func DefaultConfigPath() string {
 	return filepath.Join(home, ".goto", "config.yaml")
 }
 
+// expandTilde 把路径前缀 ~/ 展开为用户主目录。
+func expandTilde(path string) string {
+	if path != "~" && !strings.HasPrefix(path, "~/") {
+		return path
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, strings.TrimPrefix(path, "~"))
+	}
+	return path
+}
+
 func WriteExampleConfig(path string) error {
 	cfg := DefaultConfig()
 	cfg.Default = "jumper-a"
@@ -183,7 +194,9 @@ func WriteExampleConfig(path string) error {
 }
 
 // LoadConfig 从指定路径加载配置；文件不存在时保留默认值并返回 nil。
+// 路径前缀 ~/ 会展开为用户主目录（goto-mcp 由客户端直接 exec，不经 shell）。
 func LoadConfig(path string, cfg *Config) error {
+	path = expandTilde(path)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {

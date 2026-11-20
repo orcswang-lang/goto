@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -51,7 +52,9 @@ func DefaultPath() string {
 }
 
 // Load 从指定路径加载策略；文件不存在时返回错误提示生成示例。
+// 路径前缀 ~/ 会展开为用户主目录（MCP 客户端直接 exec，不经 shell）。
 func Load(path string) (Policy, error) {
+	path = expandTilde(path)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -97,15 +100,6 @@ func (p Policy) validate() error {
 	if p.MaxOutputBytes <= 0 {
 		return errors.New("max_output_bytes 必须大于 0")
 	}
-	if p.CredentialProvider != "os" {
-		return errors.New("v1 仅支持 credential_provider: os")
-	}
-	if p.HostKeyPolicy != "known_hosts_only" {
-		return errors.New("v1 固定 host_key_policy 为 known_hosts_only")
-	}
-	if p.AllowSessionInput {
-		return errors.New("v1 不支持 allow_session_input: true")
-	}
 	return nil
 }
 
@@ -125,6 +119,17 @@ func (p Policy) TargetAllowed(target string) bool {
 		}
 	}
 	return false
+}
+
+// expandTilde 把路径前缀 ~/ 展开为用户主目录。
+func expandTilde(path string) string {
+	if path != "~" && !strings.HasPrefix(path, "~/") {
+		return path
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, strings.TrimPrefix(path, "~"))
+	}
+	return path
 }
 
 // WriteExample 生成带注释的示例策略文件。

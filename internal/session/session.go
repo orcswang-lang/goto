@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/creack/pty"
 	"github.com/pquerna/otp/totp"
@@ -215,7 +216,7 @@ func (s *Session) Read(maxBytes int, wait time.Duration) ReadResult {
 	}
 }
 
-// Close 关闭会话；幂等，会等待后台循环退出。
+// Close 关闭会话；幂等，会等待后台循环退出，并释放凭据与输出缓冲。
 func (s *Session) Close() {
 	s.mu.Lock()
 	if s.state == StateClosed {
@@ -227,6 +228,9 @@ func (s *Session) Close() {
 	if s.ptmx != nil {
 		_ = s.ptmx.Close()
 	}
+	s.secrets = nil
+	s.visible = ""
+	s.returned = 0
 	s.mu.Unlock()
 	select {
 	case <-s.done:
@@ -287,6 +291,10 @@ func (s *Session) appendVisibleLocked(chunk []byte) {
 	s.visible += text
 	if len(s.visible) > s.opt.MaxOutput {
 		drop := len(s.visible) - s.opt.MaxOutput
+		// 修正到 rune 边界，避免切开多字节 UTF-8。
+		for drop < len(s.visible) && !utf8.RuneStart(s.visible[drop]) {
+			drop++
+		}
 		keep := s.visible[drop:]
 		if i := strings.IndexByte(keep, '\n'); i >= 0 {
 			drop += i + 1
@@ -332,6 +340,12 @@ func (s *Session) readLoop() {
 			}
 			if werr == nil {
 				s.state = StateClosed
+			} else if strings.Contains(s.visible, "Host key verification failed") ||
+				strings.Contains(s.visible, "REMOTE HOST IDENTIFICATION HAS CHANGED") {
+				// StrictHostKeyChecking=yes 下 ssh 对未知 key 直接报错退出，不会弹出 yes/no。
+				s.state = StateFailed
+				s.errCode = "HOST_KEY_REQUIRED"
+				s.errMsg = "目标主机不在 known_hosts 信任列表中，连接被 ssh 拒绝；请先在人工会话中确认该 host key"
 			} else {
 				s.state = StateFailed
 				s.errCode = "UPSTREAM_ERROR"
@@ -344,8 +358,13 @@ func (s *Session) readLoop() {
 
 // maybeRespondLocked 处理远端提示；要求持有 s.mu。
 // host key 提示一律拒绝：v1 只信任 known_hosts，未知 key 不允许 Agent 代为确认。
+// 所有应答仅限登录窗口（LoginTimeout）内：登录完成后远端输出的类似提示文本
+// （如应用自身的 password: 提示）不得再触发凭据注入。
 func (s *Session) maybeRespondLocked() {
 	if s.terminal() {
+		return
+	}
+	if time.Since(s.createdAt) > s.opt.LoginTimeout {
 		return
 	}
 	text := s.visible
@@ -460,6 +479,13 @@ func (m *Manager) Get(id string) (*Session, bool) {
 	defer m.mu.Unlock()
 	s, ok := m.sessions[id]
 	return s, ok
+}
+
+// Remove 删除会话登记；会话本身需先 Close。
+func (m *Manager) Remove(id string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.sessions, id)
 }
 
 // CloseAll 关闭全部会话（服务退出时调用）。
