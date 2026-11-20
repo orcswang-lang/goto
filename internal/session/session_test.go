@@ -79,6 +79,11 @@ password-late)
   printf 'got pw: %s\n' "$pw"
   exec cat
   ;;
+auth-inject-then-exit)
+  printf 'jump password: '; IFS= read -r pw
+  printf 'Permission denied, please try again.\n'
+  exit 1
+  ;;
 esac
 exit 0
 `
@@ -287,6 +292,22 @@ func TestPromptOutsideLoginWindowNotAnswered(t *testing.T) {
 	}
 	if s.State() == StateFailed {
 		t.Fatalf("窗口外提示不应导致会话失败:\n%s", total)
+	}
+}
+
+func TestTerminalStateClearsSecrets(t *testing.T) {
+	s := openTestSession(t, "auth-inject-then-exit", fakeCreds{password: "t3stpass"})
+	_, last := waitFor(t, s, 10*time.Second, func(res ReadResult, _ string) bool {
+		return res.State == StateFailed
+	})
+	if last.ErrorCode != "UPSTREAM_ERROR" {
+		t.Fatalf("code = %s, want UPSTREAM_ERROR", last.ErrorCode)
+	}
+	s.mu.Lock()
+	secrets := s.secrets
+	s.mu.Unlock()
+	if secrets != nil {
+		t.Fatalf("终态后 secrets 未清空: %v", secrets)
 	}
 }
 

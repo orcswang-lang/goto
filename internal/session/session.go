@@ -259,6 +259,7 @@ func (s *Session) failLocked(code, msg string) {
 	s.state = StateFailed
 	s.errCode = code
 	s.errMsg = msg
+	s.secrets = nil // 终态即释放凭据，防止 Agent 不 close 时凭据驻留内存
 	s.killLocked()
 }
 
@@ -269,6 +270,7 @@ func (s *Session) expireLocked() {
 	s.state = StateExpired
 	s.errCode = "SESSION_EXPIRED"
 	s.errMsg = "会话已因空闲或超过最大生命周期而关闭"
+	s.secrets = nil
 	s.killLocked()
 }
 
@@ -340,16 +342,19 @@ func (s *Session) readLoop() {
 			}
 			if werr == nil {
 				s.state = StateClosed
+				s.secrets = nil
 			} else if strings.Contains(s.visible, "Host key verification failed") ||
 				strings.Contains(s.visible, "REMOTE HOST IDENTIFICATION HAS CHANGED") {
 				// StrictHostKeyChecking=yes 下 ssh 对未知 key 直接报错退出，不会弹出 yes/no。
 				s.state = StateFailed
 				s.errCode = "HOST_KEY_REQUIRED"
 				s.errMsg = "目标主机不在 known_hosts 信任列表中，连接被 ssh 拒绝；请先在人工会话中确认该 host key"
+				s.secrets = nil
 			} else {
 				s.state = StateFailed
 				s.errCode = "UPSTREAM_ERROR"
 				s.errMsg = "远端会话异常退出"
+				s.secrets = nil
 			}
 			return
 		}

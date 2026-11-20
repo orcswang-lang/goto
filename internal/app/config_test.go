@@ -199,6 +199,7 @@ func TestValidateRejectsEmptyOptionPromptPattern(t *testing.T) {
 func TestLoadConfigExpandsTilde(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // Windows 上 os.UserHomeDir 使用 USERPROFILE
 	path := filepath.Join(home, "goto-cfg", "config.yaml")
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		t.Fatal(err)
@@ -213,6 +214,18 @@ func TestLoadConfigExpandsTilde(t *testing.T) {
 	}
 	if _, ok := cfg.Jumpers["a"]; !ok {
 		t.Fatal("~/ 前缀路径未展开，配置未加载")
+	}
+}
+
+func TestWriteExampleConfigExpandsTilde(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	if err := WriteExampleConfig("~/example/config.yaml"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(home, "example", "config.yaml")); err != nil {
+		t.Fatalf("示例配置未写入展开后的路径: %v", err)
 	}
 }
 

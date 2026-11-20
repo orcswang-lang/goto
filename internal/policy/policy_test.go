@@ -91,6 +91,22 @@ func TestTargetAllowedEmptySemantics(t *testing.T) {
 	}
 }
 
+func TestWriteExampleExpandsTilde(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	if err := WriteExample("~/agent-policy.yaml"); err != nil {
+		t.Fatal(err)
+	}
+	p, err := Load("~/agent-policy.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !p.JumperAllowed("prod-readonly") {
+		t.Fatal("示例策略未写入展开后的路径")
+	}
+}
+
 func TestWriteExampleRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := dir + "/agent-policy.yaml"

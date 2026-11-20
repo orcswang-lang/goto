@@ -430,6 +430,13 @@ func (s *Server) readSession(args map[string]any) (any, *toolError) {
 		}
 	}
 	res := sess.Read(maxBytes, time.Duration(waitMs)*time.Millisecond)
+	// 终态会话在返回结果后立即回收：Agent 已拿到状态与错误，
+	// 继续留在 Manager 只会让凭据与缓冲驻留内存。
+	switch res.State {
+	case session.StateFailed, session.StateExpired, session.StateClosed:
+		sess.Close()
+		s.Sessions.Remove(sessionID)
+	}
 	result := map[string]any{
 		"session_id":     sessionID,
 		"state":          string(res.State),

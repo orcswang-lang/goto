@@ -304,6 +304,52 @@ exec cat
 	}
 }
 
+func TestReadTerminalSessionRemovedFromManager(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("假 ssh 脚本依赖 POSIX shell")
+	}
+	script := filepath.Join(t.TempDir(), "fake-ssh")
+	scriptBody := "#!/bin/sh\nprintf 'hello\\n'\nexit 1\n"
+	if err := os.WriteFile(script, []byte(scriptBody), 0755); err != nil {
+		t.Fatal(err)
+	}
+	s := newTestServer(t, script)
+	s.Credentials = fakeCreds{password: "t3stpass"}
+
+	payload, isErr := callTool(t, s, "goto_session_open", map[string]any{"jumper": "prod"})
+	if isErr {
+		t.Fatalf("session_open 出错: %+v", payload)
+	}
+	sessionID, _ := payload["session_id"].(string)
+
+	var last map[string]any
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		res, isErr := callTool(t, s, "goto_session_read", map[string]any{"session_id": sessionID, "max_bytes": 65536, "wait_ms": 200})
+		if isErr {
+			t.Fatalf("session_read 出错: %+v", res)
+		}
+		last = res
+		if res["state"] == "failed" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("等待会话失败超时: %+v", last)
+		}
+	}
+	if last["error"].(map[string]any)["code"] != "UPSTREAM_ERROR" {
+		t.Fatalf("error = %+v, want UPSTREAM_ERROR", last["error"])
+	}
+	// 终态已被消费，会话应从 Manager 回收。
+	again, isErr := callTool(t, s, "goto_session_read", map[string]any{"session_id": sessionID})
+	if !isErr || again["code"] != "SESSION_NOT_FOUND" {
+		t.Fatalf("终态会话应已回收: %+v err=%v", again, isErr)
+	}
+	if _, ok := s.Sessions.Get(sessionID); ok {
+		t.Fatal("Manager 中仍保留终态会话")
+	}
+}
+
 func TestMaxBytesSchemaFollowsPolicy(t *testing.T) {
 	s := newTestServer(t, "ssh")
 	s.Policy.MaxOutputBytes = 10000

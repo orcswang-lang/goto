@@ -166,6 +166,7 @@ func expandTilde(path string) string {
 }
 
 func WriteExampleConfig(path string) error {
+	path = expandTilde(path)
 	cfg := DefaultConfig()
 	cfg.Default = "jumper-a"
 	cfg.Jumpers = map[string]Jumper{

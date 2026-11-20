@@ -134,6 +134,7 @@ func expandTilde(path string) string {
 
 // WriteExample 生成带注释的示例策略文件。
 func WriteExample(path string) error {
+	path = expandTilde(path)
 	data := []byte(`# goto-mcp Agent 访问策略
 # 策略描述「Agent 允许连接什么、做什么」；连接参数仍在 ~/.goto/config.yaml。
 version: 1
